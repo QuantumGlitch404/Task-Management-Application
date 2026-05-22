@@ -1,20 +1,32 @@
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 const authRoutes = require('./routes/authRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 
-dotenv.config();
-
 const app = express();
 
-// Middleware
+// CORS - allow local dev and any Vercel deployment
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'https://taskly-ebon.vercel.app',
+  /\.vercel\.app$/
+];
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // allow curl/postman
+    const isAllowed =
+      allowedOrigins.some(o =>
+        typeof o === 'string' ? o === origin : o.test(origin)
+      );
+    isAllowed ? callback(null, true) : callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
+
 app.use(express.json());
 
 // Routes
@@ -29,10 +41,15 @@ app.get('/api/v1/health', (req, res) => {
 // Error handler
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
-
+// Connect to DB then start server (local dev only)
 connectDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
+  if (process.env.NODE_ENV !== 'production') {
+    const PORT = process.env.PORT || 5005;
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  }
 });
+
+// Export for Vercel serverless
+module.exports = app;
